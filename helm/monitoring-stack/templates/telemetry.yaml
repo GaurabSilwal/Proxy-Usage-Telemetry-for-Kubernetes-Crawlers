@@ -1,0 +1,96 @@
+apiVersion: telemetry.istio.io/v1alpha1
+kind: Telemetry
+metadata:
+  name: proxy-metrics
+  namespace: crawlers
+spec:
+  metrics:
+  - providers:
+    - name: prometheus
+  - overrides:
+    - match:
+        metric: ALL_METRICS
+      tagOverrides:
+        proxy_vendor:
+          operation: UPSERT
+          value: |
+            has(request.headers['x-proxy-vendor']) ? request.headers['x-proxy-vendor'] : 'unknown'
+        proxy_ip:
+          operation: UPSERT
+          value: |
+            has(request.headers['x-proxy-ip']) ? request.headers['x-proxy-ip'] : 'unknown'
+        destination_host:
+          operation: UPSERT
+          value: |
+            has(request.headers['host']) ? request.headers['host'] : destination_service_name
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: envoy-filter-config
+  namespace: crawlers
+data:
+  filter.lua: |
+    function envoy_on_request(request_handle)
+      local headers = request_handle:headers()
+      local proxy_header = headers:get("x-forwarded-for")
+      
+      if proxy_header then
+        -- Extract proxy vendor from IP mapping
+        local proxy_ip = string.match(proxy_header, "([^,]+)")
+        local vendor = "unknown"
+        
+        if string.match(proxy_ip, "^10%.1%.") then
+          vendor = "vendor-a"
+        elseif string.match(proxy_ip, "^10%.2%.") then
+          vendor = "vendor-b"
+        elseif string.match(proxy_ip, "^10%.3%.") then
+          vendor = "vendor-c"
+        end
+        
+        headers:add("x-proxy-vendor", vendor)
+        headers:add("x-proxy-ip", proxy_ip)
+      end
+    end
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: EnvoyFilter
+metadata:
+  name: proxy-attribution
+  namespace: crawlers
+spec:
+  configPatches:
+  - applyTo: HTTP_FILTER
+    match:
+      context: SIDECAR_INBOUND
+      listener:
+        filterChain:
+          filter:
+            name: "envoy.filters.network.http_connection_manager"
+    patch:
+      operation: INSERT_BEFORE
+      value:
+        name: envoy.filters.http.lua
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
+          inline_code: |
+            function envoy_on_request(request_handle)
+              local headers = request_handle:headers()
+              local proxy_header = headers:get("x-forwarded-for")
+              
+              if proxy_header then
+                local proxy_ip = string.match(proxy_header, "([^,]+)")
+                local vendor = "unknown"
+                
+                if string.match(proxy_ip, "^10%.1%.") then
+                  vendor = "vendor-a"
+                elseif string.match(proxy_ip, "^10%.2%.") then
+                  vendor = "vendor-b"
+                elseif string.match(proxy_ip, "^10%.3%.") then
+                  vendor = "vendor-c"
+                end
+                
+                headers:add("x-proxy-vendor", vendor)
+                headers:add("x-proxy-ip", proxy_ip)
+              end
+            end

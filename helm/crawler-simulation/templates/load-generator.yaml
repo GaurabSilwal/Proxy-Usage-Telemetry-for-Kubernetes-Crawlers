@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: load-generator
+  namespace: crawlers
+  labels:
+    app: load-generator
+spec:
+  replicas: {{ .Values.loadGenerator.replicas }}
+  selector:
+    matchLabels:
+      app: load-generator
+  template:
+    metadata:
+      labels:
+        app: load-generator
+        version: v1
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "15020"
+        prometheus.io/path: "/stats/prometheus"
+    spec:
+      containers:
+      - name: load-generator
+        image: {{ .Values.loadGenerator.image.repository }}:{{ .Values.loadGenerator.image.tag }}
+        imagePullPolicy: {{ .Values.loadGenerator.image.pullPolicy }}
+        env:
+        - name: REQUEST_RATE
+          value: "{{ .Values.loadGenerator.config.requestRate }}"
+        - name: PROXY_CONFIG
+          value: |
+            {{- range .Values.loadGenerator.config.proxies }}
+            {{ .vendor }}:{{ join "," .ips }}:{{ .port }}
+            {{- end }}
+        - name: DESTINATIONS
+          value: "{{ join "," .Values.loadGenerator.config.destinations }}"
+        resources:
+          {{- toYaml .Values.loadGenerator.resources | nindent 10 }}
+        ports:
+        - containerPort: 8080
+          name: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crawler-pods
+  namespace: crawlers
+  labels:
+    app: crawler
+spec:
+  replicas: {{ .Values.crawlerPods.replicas }}
+  selector:
+    matchLabels:
+      app: crawler
+  template:
+    metadata:
+      labels:
+        app: crawler
+        version: v1
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "15020"
+        prometheus.io/path: "/stats/prometheus"
+    spec:
+      containers:
+      - name: crawler
+        image: {{ .Values.crawlerPods.image.repository }}:{{ .Values.crawlerPods.image.tag }}
+        imagePullPolicy: {{ .Values.crawlerPods.image.pullPolicy }}
+        env:
+        - name: PROXY_CONFIG
+          value: |
+            {{- range .Values.loadGenerator.config.proxies }}
+            {{ .vendor }}:{{ join "," .ips }}:{{ .port }}
+            {{- end }}
+        resources:
+          {{- toYaml .Values.crawlerPods.resources | nindent 10 }}
+        ports:
+        - containerPort: 8080
+          name: http
