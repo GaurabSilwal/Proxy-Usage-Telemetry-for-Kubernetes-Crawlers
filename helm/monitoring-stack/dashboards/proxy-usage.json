@@ -1,0 +1,48 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Proxy Usage Dashboard",
+    "tags": ["proxy", "crawler"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Requests by Proxy Vendor",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "sum by (proxy_vendor) (proxy_requests_total)",
+            "legendFormat": "{{proxy_vendor}}"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+      },
+      {
+        "id": 2,
+        "title": "Bandwidth Usage (Outbound)",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "sum by (proxy_vendor) (rate(proxy_request_bytes_sum[5m]))",
+            "legendFormat": "{{proxy_vendor}} - Sent"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+      },
+      {
+        "id": 3,
+        "title": "Top Destinations",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "topk(10, sum by (destination_service) (proxy_requests_total))",
+            "format": "table"
+          }
+        ],
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8}
+      }
+    ],
+    "time": {"from": "now-1h", "to": "now"},
+    "refresh": "30s"
+  }
+}

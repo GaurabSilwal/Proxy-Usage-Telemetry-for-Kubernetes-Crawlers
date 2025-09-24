@@ -25,25 +25,36 @@ kubectl create namespace istio-system --dry-run=client -o yaml | kubectl apply -
 echo "Enabling Istio injection..."
 kubectl label namespace crawlers istio-injection=enabled --overwrite
 
-# Install Istio directly from the Helm repo
-echo "Installing Istio base, control plane, and gateway..."
-helm upgrade --install istio-base istio/base -n istio-system --create-namespace --wait
-helm upgrade --install istiod istio/istiod -n istio-system --wait
-# helm upgrade --install istio-ingressgateway istio/gateway -n istio-system --wait
+# Install Istio using istioctl (more reliable than Helm)
+echo "Installing Istio..."
+if ! kubectl get namespace istio-system &> /dev/null || ! kubectl get deployment istiod -n istio-system &> /dev/null; then
+    if ! command -v istioctl &> /dev/null; then
+        echo "Downloading Istio..."
+        curl -L https://istio.io/downloadIstio | sh -
+        cd istio-*
+        export PATH=$PWD/bin:$PATH
+        cd ..
+    fi
+    
+    echo "Installing Istio control plane..."
+    istioctl install --set values.defaultRevision=default -y
+else
+    echo "Istio already installed"
+fi
 
 # Install monitoring stack
 echo "Installing monitoring stack..."
 helm upgrade --install monitoring-stack ./helm/monitoring-stack \
   -n monitoring \
   --wait \
-  --timeout=10m
+  --timeout=15m
 
 # Install crawler simulation
 echo "Installing crawler simulation..."
 helm upgrade --install crawler-simulation ./helm/crawler-simulation \
   -n crawlers \
   --wait \
-  --timeout=5m
+  --timeout=10m
 
 echo "Deployment completed successfully!"
 echo ""

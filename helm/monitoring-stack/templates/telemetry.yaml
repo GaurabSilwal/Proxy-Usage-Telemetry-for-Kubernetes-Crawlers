@@ -13,16 +13,10 @@ spec:
       tagOverrides:
         proxy_vendor:
           operation: UPSERT
-          value: |
-            has(request.headers['x-proxy-vendor']) ? request.headers['x-proxy-vendor'] : 'unknown'
+          value: request.headers['x-proxy-vendor'] | 'unknown'
         proxy_ip:
           operation: UPSERT
-          value: |
-            has(request.headers['x-proxy-ip']) ? request.headers['x-proxy-ip'] : 'unknown'
-        destination_host:
-          operation: UPSERT
-          value: |
-            has(request.headers['host']) ? request.headers['host'] : destination_service_name
+          value: request.headers['x-proxy-ip'] | 'unknown'
 ---
 apiVersion: v1
 kind: ConfigMap

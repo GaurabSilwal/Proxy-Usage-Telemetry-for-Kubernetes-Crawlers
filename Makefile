@@ -29,7 +29,7 @@ clean: ## Clean up the deployment
 
 setup-cluster: ## Setup local cluster (minikube)
 	@echo "Setting up minikube cluster..."
-	@minikube start --memory=8192 --cpus=4 --kubernetes-version=v1.28.0
+	@minikube start
 	@echo "Installing Istio..."
 	@curl -L https://istio.io/downloadIstio | sh -
 	@cd istio-* && export PATH=$$PWD/bin:$$PATH && istioctl install --set values.defaultRevision=default -y
@@ -49,3 +49,9 @@ stop-port-forward: ## Stop port forwarding
 all: build deploy validate ## Build, deploy and validate everything
 
 quick-start: setup-cluster build deploy port-forward ## Complete setup from scratch
+
+deploy-fast: build deploy port-forward ## Deploy without cluster setup (assumes cluster ready)
+
+troubleshoot: ## Diagnose deployment issues
+	@chmod +x scripts/troubleshoot.sh
+	@./scripts/troubleshoot.sh

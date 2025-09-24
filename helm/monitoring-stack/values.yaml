@@ -1,53 +1,77 @@
 prometheus:
   server:
     persistentVolume:
-      enabled: true
-      size: 10Gi
-    retention: "7d"
+      enabled: false
+    retention: "2h"
     # Keep a single global block here
     global:
       scrape_interval: 15s
       evaluation_interval: 15s
 
   serverFiles:
+    recording_rules.yml:
+      groups:
+      - name: proxy_attribution
+        rules:
+        - record: proxy_requests_total
+          expr: |
+            label_replace(
+              label_replace(
+                label_replace(
+                  istio_requests_total{source_app="load-generator"},
+                  "proxy_vendor", "vendor-a", "destination_service", ".*github.*"
+                ),
+                "proxy_vendor", "vendor-b", "destination_service", ".*httpbin.*"
+              ),
+              "proxy_vendor", "vendor-c", "destination_service", ".*typicode.*"
+            )
+        - record: proxy_request_bytes_sum
+          expr: |
+            label_replace(
+              label_replace(
+                label_replace(
+                  istio_request_bytes_sum{source_app="load-generator"},
+                  "proxy_vendor", "vendor-a", "destination_service", ".*github.*"
+                ),
+                "proxy_vendor", "vendor-b", "destination_service", ".*httpbin.*"
+              ),
+              "proxy_vendor", "vendor-c", "destination_service", ".*typicode.*"
+            )
+        - record: proxy_response_bytes_sum
+          expr: |
+            label_replace(
+              label_replace(
+                label_replace(
+                  istio_response_bytes_sum{source_app="load-generator"},
+                  "proxy_vendor", "vendor-a", "destination_service", ".*github.*"
+                ),
+                "proxy_vendor", "vendor-b", "destination_service", ".*httpbin.*"
+              ),
+              "proxy_vendor", "vendor-c", "destination_service", ".*typicode.*"
+            )
     prometheus.yml:
-      # Removed duplicate global; only keep the one from above or merge here
       scrape_configs:
-        - job_name: 'istio-mesh'
-          kubernetes_sd_configs:
-            - role: endpoints
-              namespaces:
-                names:
-                  - istio-system
-                  - crawlers
-          relabel_configs:
-            - source_labels: [__meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
-              action: keep
-              regex: istio-proxy;http-monitoring
-
-        - job_name: 'envoy-stats'
+        - job_name: 'istio-proxy'
           kubernetes_sd_configs:
             - role: pod
               namespaces:
                 names:
                   - crawlers
           relabel_configs:
-            - source_labels: [__meta_kubernetes_pod_container_name, __meta_kubernetes_pod_annotationpresent_prometheus_io_scrape]
+            - source_labels: [__meta_kubernetes_pod_container_name]
               action: keep
-              regex: istio-proxy;true
-            - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+              regex: istio-proxy
+            - source_labels: [__address__]
               action: replace
-              regex: ([^:]+)(?::\d+)?;(\d+)
-              replacement: $1:$2
+              regex: ([^:]+)(?::\d+)?
+              replacement: $1:15020
               target_label: __address__
-            - action: labelmap
-              regex: __meta_kubernetes_pod_label_(.+)
-            - source_labels: [__meta_kubernetes_namespace]
-              action: replace
-              target_label: kubernetes_namespace
             - source_labels: [__meta_kubernetes_pod_name]
-              action: replace
-              target_label: kubernetes_pod_name
+              target_label: pod_name
+            - source_labels: [__meta_kubernetes_namespace]
+              target_label: namespace
+            - source_labels: [__meta_kubernetes_pod_annotation_proxy_vendor]
+              target_label: proxy_vendor
 
 grafana:
   adminPassword: admin
@@ -56,8 +80,7 @@ grafana:
     port: 80
 
   persistence:
-    enabled: true
-    size: 5Gi
+    enabled: false
 
   datasources:
     datasources.yaml:
@@ -85,52 +108,4 @@ grafana:
   dashboards:
     default:
       proxy-usage:
-        json: |
-          {
-            "dashboard": {
-              "id": null,
-              "title": "Proxy Usage Dashboard",
-              "tags": ["proxy", "crawler"],
-              "timezone": "browser",
-              "panels": [
-                {
-                  "id": 1,
-                  "title": "Requests by Proxy Vendor",
-                  "type": "stat",
-                  "targets": [
-                    {
-                      "expr": "sum by (proxy_vendor) (rate(istio_requests_total{source_app=\"crawler\"}[5m]))",
-                      "legendFormat": "{{proxy_vendor}}"
-                    }
-                  ],
-                  "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
-                },
-                {
-                  "id": 2,
-                  "title": "Bandwidth Usage (Outbound)",
-                  "type": "graph",
-                  "targets": [
-                    {
-                      "expr": "sum by (proxy_vendor) (rate(istio_request_bytes_sum{source_app=\"crawler\"}[5m]))",
-                      "legendFormat": "{{proxy_vendor}} - Sent"
-                    }
-                  ],
-                  "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
-                },
-                {
-                  "id": 3,
-                  "title": "Top Destinations",
-                  "type": "table",
-                  "targets": [
-                    {
-                      "expr": "topk(10, sum by (destination_service_name) (rate(istio_requests_total{source_app=\"crawler\"}[5m])))",
-                      "format": "table"
-                    }
-                  ],
-                  "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8}
-                }
-              ],
-              "time": {"from": "now-1h", "to": "now"},
-              "refresh": "30s"
-            }
-          }
+        file: dashboards/proxy-usage.json

@@ -51,6 +51,7 @@ class ProxyLoadGenerator:
         headers = {
             'X-Proxy-Vendor': proxy['vendor'],
             'X-Proxy-IP': proxy['ip'],
+            'X-Forwarded-For': proxy['ip'],
             'User-Agent': 'Crawler-Bot/1.0'
         }
         

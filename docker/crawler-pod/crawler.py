@@ -61,6 +61,7 @@ class CrawlerPod:
                 headers = {
                     'X-Proxy-Vendor': proxy['vendor'],
                     'X-Proxy-IP': proxy['ip'],
+                    'X-Forwarded-For': proxy['ip'],
                     'User-Agent': 'Crawler-Pod/1.0'
                 }
                 
